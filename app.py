@@ -3,7 +3,7 @@ import os
 from datetime import date
 import streamlit as st
 import pandas as pd
-from copilot.store import Store
+from copilot.store import Store, SessionStore
 from copilot.models import Source, Fact
 from copilot.ingest import parse_file
 from copilot.demo import load_demo
@@ -12,10 +12,18 @@ from copilot.provider import OpenAIProvider, MAX_INPUT_CHARS
 from copilot.exporting import exports
 
 st.set_page_config(page_title='AI市场情报与产品营销助手', page_icon='◈', layout='wide')
-store = Store()
+public_demo = st.session_state.get('_public_demo', False)
+if public_demo:
+    if '_demo_store' not in st.session_state:
+        st.session_state['_demo_store'] = SessionStore()
+    store = st.session_state['_demo_store']
+else:
+    store = Store()
 st.title('AI Market Insight Copilot')
 st.caption('AI市场情报与产品营销助手 · 从资料证据到可审核的产品沟通')
 st.caption('独立作品集 · 仅使用公开、授权或模拟资料 · 不代表任何企业官方系统')
+if public_demo:
+    st.info('在线演示 · 仅使用模拟资料，未调用真实模型。数据仅保留在当前访客会话内；刷新、断线或服务重启可能丢失，请及时导出。不要输入敏感信息。')
 
 def action(fn):
     try:
@@ -33,10 +41,14 @@ if 'pending_project' in st.session_state:
     st.session_state['project'] = st.session_state.pop('pending_project')
 with st.sidebar:
     st.header('工作空间')
-    mode = st.radio('运行模式', ['演示模式', '模型模式'])
+    mode = '演示模式' if public_demo else st.radio('运行模式', ['演示模式', '模型模式'])
     model = os.getenv('OPENAI_MODEL', '') if mode == '模型模式' else ''
     st.caption('模型：' + (model or '未配置 / 不使用'))
-    st.caption('API Key：' + ('已从环境变量配置' if os.getenv('OPENAI_API_KEY') else '未配置'))
+    st.caption('API 调用已禁用' if public_demo else 'API Key：' + ('已从环境变量配置' if os.getenv('OPENAI_API_KEY') else '未配置'))
+    if public_demo and st.button('重置我的演示'):
+        store.close()
+        st.session_state.clear()
+        st.rerun()
     if st.button('加载演示项目', type='primary'):
         def demo():
             st.session_state['project'] = load_demo(store)['id']
@@ -47,14 +59,14 @@ with st.sidebar:
         pid = st.selectbox('选择项目', ids, format_func=lambda i: next(p['name'] for p in projects if p['id'] == i), key='project')
     with st.expander('创建项目', expanded=not projects):
         with st.form('create'):
-            name = st.text_input('项目名称')
-            scene = st.text_input('目标应用场景')
-            role = st.text_input('目标客户角色', value='采购')
+            name = st.text_input('项目名称', max_chars=80)
+            scene = st.text_input('目标应用场景', max_chars=300)
+            role = st.text_input('目标客户角色', value='采购', max_chars=100)
             if st.form_submit_button('创建'):
                 def create(): st.session_state['pending_project'] = store.create(name, scene, role)['id']
                 action(create)
 if mode == '演示模式':
-    st.info('演示模式，未调用真实模型。使用确定性规则；可识别样例中的“字段：值 | 条件：…”格式，中英文标签均支持。自由文本请使用模型模式。')
+    st.info('演示模式，未调用真实模型。使用确定性规则；可识别样例中的“字段：值 | 条件：…”格式，中英文标签均支持。' + ('完整上传与模型功能请下载源码在本地运行。' if public_demo else '自由文本请使用模型模式。'))
 else:
     st.warning('模型模式：主动点击分析/生成后，将所选资料文本或提取事实发送至 OpenAI。每次最多40,000字符，每项目最多20次调用，无自动重试；请仅使用有权发送的资料。')
 if not projects:
@@ -68,8 +80,8 @@ tabs = st.tabs(['1 项目与资料', '2 信息提取', '3 竞品对比', '4 产�
 with tabs[0]:
     with st.expander('编辑项目范围'):
         with st.form('scope'):
-            new_scene = st.text_input('应用场景', p['scene'])
-            new_role = st.text_input('客户角色', p['role'])
+            new_scene = st.text_input('应用场景', p['scene'], max_chars=300)
+            new_role = st.text_input('客户角色', p['role'], max_chars=100)
             if st.form_submit_button('保存项目范围'):
                 def scope():
                     if (new_scene, new_role) != (p['scene'], p['role']):
@@ -77,15 +89,18 @@ with tabs[0]:
                         store.invalidate(p)
                         store.save(p)
                 action(scope)
+    if public_demo:
+        st.caption('在线版仅分析内置模拟资料，文件上传已关闭；每位访客独立操作，不读取本地项目数据库。')
     with st.form('upload', clear_on_submit=True):
-        uploaded = st.file_uploader('上传资料（每文件≤10MB；TXT/CSV 使用UTF-8）', type=['pdf','docx','txt','csv'])
+        uploaded = st.file_uploader('上传资料（每文件≤10MB；TXT/CSV 使用UTF-8）', type=['pdf','docx','txt','csv'], disabled=public_demo)
         title = st.text_input('来源标题（可选）')
         url = st.text_input('原始URL（可选，仅保存，不抓取）')
         published = st.text_input('发布日期（可选 YYYY-MM-DD；未知留空）')
         category = st.selectbox('资料类别', ['产品资料','客户需求','行业简报','其他'])
         simulated = st.checkbox('此文件为模拟资料')
-        if st.form_submit_button('本地导入并提取文字'):
+        if st.form_submit_button('本地导入并提取文字', disabled=public_demo):
             def upload():
+                if public_demo: raise ValueError('在线演示不接收文件上传。')
                 if not uploaded: raise ValueError('请先选择文件。')
                 if url and not url.startswith(('https://','http://')): raise ValueError('URL 需以 http:// 或 https:// 开头。')
                 if published: date.fromisoformat(published)
@@ -153,7 +168,7 @@ products = sorted({f.product for f in facts if f.product})
 with tabs[2]:
     chosen = st.multiselect('比较产品（2—5个）', products, default=products[:3])
     dims = st.multiselect('比较维度', DIMENSIONS, default=DIMENSIONS)
-    basis = st.text_input('比较口径说明', '仅比较已披露信息；同条件才可讨论差异，不生成排名')
+    basis = st.text_input('比较口径说明', '仅比较已披露信息；同条件才可讨论差异，不生成排名', max_chars=1000)
     compare_inputs = {'products':chosen,'dimensions':dims,'basis':basis,'extraction':extraction['batch_id'] if extraction else ''}
     current_compare = latest('对比')
     if current_compare and current_compare['inputs'] != compare_inputs:
@@ -179,9 +194,9 @@ with tabs[2]:
 
 with tabs[3]:
     main = st.selectbox('主推产品', products) if products else ''
-    target_scene = st.text_input('本次目标应用场景', p['scene'])
+    target_scene = st.text_input('本次目标应用场景', p['scene'], max_chars=300)
     target_role = st.selectbox('本次客户角色', ['采购','技术','设备使用方'])
-    needs = st.text_area('客户需求（可编辑；人工新增内容标为用户提供，待核验）', '\n'.join(f.value for f in facts if f.dimension == '客户关注点'))
+    needs = st.text_area('客户需求（可编辑；人工新增内容标为用户提供，待核验）', '\n'.join(f.value for f in facts if f.dimension == '客户关注点'), max_chars=5000 if public_demo else None)
     copy_inputs = {'product':main,'scene':target_scene,'role':target_role,'needs':needs,'comparison':comparison_batch['batch_id'] if comparison_batch else ''}
     current_copy = latest('文案')
     if current_copy and current_copy['inputs'] != copy_inputs:
@@ -221,9 +236,9 @@ with tabs[4]:
             st.json(obj)
             if 'item_id' in obj: display_items([obj])
             with st.form('review'+obj_id):
-                content = st.text_area('修改内容', obj.get('content', obj.get('value','')), height=130)
+                content = st.text_area('修改内容', obj.get('content', obj.get('value','')), height=130, max_chars=15000 if public_demo else None)
                 status = st.selectbox('审核操作', ['待确认','已确认','驳回'])
-                note = st.text_input('审核备注')
+                note = st.text_input('审核备注', max_chars=1000)
                 checked = st.checkbox('我已重新核对原文、引用及内容的语义支持；不把定位有效当作已证实')
                 if st.form_submit_button('保存审核'):
                     def save_review():

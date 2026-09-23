@@ -4,6 +4,8 @@ import sqlite3
 from pathlib import Path
 from .models import uid, now, Source
 
+SCHEMA = 'CREATE TABLE IF NOT EXISTS projects(id TEXT PRIMARY KEY, body TEXT NOT NULL); CREATE TABLE IF NOT EXISTS files(project_id TEXT, source_id TEXT PRIMARY KEY, data BLOB);'
+
 class Store:
     """One transactional project snapshot plus append-only review history per project.
 
@@ -14,7 +16,7 @@ class Store:
         self.root.mkdir(parents=True, exist_ok=True)
         self.path = self.root / 'copilot.sqlite3'
         with self.connect() as db:
-            db.executescript('CREATE TABLE IF NOT EXISTS projects(id TEXT PRIMARY KEY, body TEXT NOT NULL); CREATE TABLE IF NOT EXISTS files(project_id TEXT, source_id TEXT PRIMARY KEY, data BLOB);')
+            db.executescript(SCHEMA)
 
     def connect(self):
         db = sqlite3.connect(self.path, timeout=20)
@@ -51,7 +53,6 @@ class Store:
         with self.connect() as db:
             db.execute('INSERT INTO files VALUES (?,?,?)', (p['id'], source.source_id, data))
             db.execute('UPDATE projects SET body=? WHERE id=?', (json.dumps(p, ensure_ascii=False), p['id']))
-
     def invalidate(self, p):
         p['revision'] += 1
         for b in p['batches']:
@@ -78,3 +79,30 @@ class Store:
                 raise ValueError('本项目已达到 20 次模型调用上限，请创建新项目。')
             p['api_calls'] = current['api_calls'] + 1
             db.execute('UPDATE projects SET body=? WHERE id=?', (json.dumps(p, ensure_ascii=False), p['id']))
+
+
+class SessionStore(Store):
+    """Private in-memory SQLite for one browser session; never uses local data."""
+    def __init__(self):
+        # Reruns can change threads; this connection is never shared by sessions.
+        self._db = sqlite3.connect(':memory:', check_same_thread=False)
+        self._db.executescript(SCHEMA)
+
+    def connect(self):
+        return self._db
+
+    def create(self, name, scene, role):
+        if len(self.all()) >= 3:
+            raise ValueError('在线演示最多保留3个项目，请先删除项目。')
+        return super().create(name, scene, role)
+
+    def save(self, p):
+        if len(p['batches']) > 40 or len(p['reviews']) > 100:
+            raise ValueError('本轮演示已达到40个批次或100次审核上限，请重置演示。')
+        return super().save(p)
+
+    def reserve_call(self, p):
+        raise ValueError('公开演示不允许调用模型API。')
+
+    def close(self):
+        self._db.close()
