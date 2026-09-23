@@ -1,0 +1,8 @@
+模拟数据；虚构供应商。
+Supplier: NorthMist（虚构）
+Product: NM-75
+Application: Industrial water circulation
+Power: 7500 W | 条件：额定输入功率；清水20°C、额定流量
+Condition: 清水20°C、额定流量 | 条件：实验室
+Maintenance: 1500小时检查 | 条件：连续运行、含尘环境
+Service: On-site service subject to separate agreement

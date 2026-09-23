@@ -1,0 +1,24 @@
+{
+  "mode": "演示规则（模拟数据；不代表模型效果）",
+  "field_accuracy": 1.0,
+  "field_denominator": 5,
+  "citation_location_valid_rate": 1.0,
+  "missing_recognition": {
+    "YT-8 / 维护": true,
+    "NM-75 / 认证": true
+  },
+  "unit_conversion": true,
+  "incomparable_recognition": true,
+  "conflict_recognition": true,
+  "unsupported_claim_check": {
+    "review_required": true,
+    "cost_answer_cautious": true,
+    "semantic_support": "需人工评估；措辞检查不证明无幻觉"
+  },
+  "invalid_citation_rejected": true,
+  "malicious_instruction_not_extracted": true,
+  "edited_status_pending": true,
+  "export_provenance_retained": true,
+  "end_to_end_complete": true,
+  "caveat": "引用定位正确不等于语义支持关系必然正确；字段指标仅统计五个人工标注字段的精确匹配。"
+}

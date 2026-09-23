@@ -1,0 +1,17 @@
+# 交付验证记录
+
+日期：2026-09-22。环境：Windows，Python 3.12.10（独立工作区运行时，未修改系统PATH），直接依赖见requirements.txt，全依赖见requirements-lock.txt。
+
+- 源码 `compileall`：通过。
+- `python -m pytest -q`：16项通过。包含8项核心逻辑测试、7项模型适配/结构化引用测试及1项Streamlit AppTest端到端交互测试。
+- AppTest实际执行：首次空状态→加载演示→分析资料→生成对比→生成价值与问答→修改内容→保存待审核→重新核对并确认→检查3个下载入口；未出现应用异常。
+- SQLite：新Store实例重新读取审核历史；验证项目删除不影响其他项目，关联上传BLOB清理。
+- 格式：程序创建并读取PDF/DOCX/CSV；扫描PDF明确拒绝，混合PDF实际页序保留。
+- `python evaluate.py`：已执行，详情见evaluation/demo-results.json。5/5标注字段匹配，引用定位有效率1.0，缺失、单位换算、不可比、冲突、无效引用、恶意指令、修改状态与导出保留检查通过。这是模拟规则测试，不是模型效果。
+- `python -m pip check`：No broken requirements found。
+- 已启动Streamlit监听127.0.0.1:8501；HTTP `/` 与 `/_stcore/health` 均200，健康检查内容`ok`。
+- OpenAI 2.26.0 SDK检查：`Responses.parse`包含`text_format`参数。按官方文档实现；密钥缺失、限流、超时、网络异常通过模拟测试验证。
+
+未验证：本环境未配置真实API凭证，未调用模型，未生成真实模型评估结果；无人工效率实测。应用内浏览器连接遇到运行时模块限制，未完成浏览器截图和视觉验收；主要交互由Streamlit官方AppTest验证，HTTP启动检查另行通过。跨平台安装与真实复杂工业手册布局尚未实测。
+
+引用位置正确不等于证据语义支持正确；人工审核不能省略。首次启动请点击“加载演示项目”，验证所用临时项目不写入用户工作数据库。

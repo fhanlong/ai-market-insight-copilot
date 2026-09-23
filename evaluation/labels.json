@@ -1,0 +1,13 @@
+{
+  "dataset": "模拟数据，人工标注基准 v1；不是模型评估结果",
+  "fields": [
+    {"product":"CC-75","dimension":"功率","value":"7.5 kW"},
+    {"product":"CC-75","dimension":"功率","value":"8 kW"},
+    {"product":"NM-75","dimension":"功率","value":"7500 W"},
+    {"product":"YT-8","dimension":"功率","value":"8 kW"},
+    {"product":"CC-75","dimension":"维护","value":"2000小时检查"}
+  ],
+  "missing": ["YT-8 / 维护", "NM-75 / 认证"],
+  "conflict": "CC-75 / 功率",
+  "incomparable": "YT-8 / 功率"
+}
